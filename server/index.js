@@ -41,6 +41,13 @@ io.on('connection',(socket)=>{
       const fromEmail = socketToEmailMapping.get(socket.id);
       const socketId = emailToSocketMapping.get(email);
       socket.to(socketId).emit("Incomming-call", {from: fromEmail, offer });
+   });
+
+   socket.on("call-accepted", (data)=>{
+     const {email, ans} = data;
+     const socketId = emailToSocketMapping.get(email);
+     socket.to(socketId).emit("call-accepted", {ans});
+
    })
 })
 
