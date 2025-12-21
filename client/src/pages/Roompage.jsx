@@ -5,12 +5,15 @@ import socket from "../config/socket";
 const RoomPage = () => {
   const { id: roomId } = useParams();
   const location = useLocation();
-  console.log("Location is : ",location);
   const { email } = location.state || {};
 
   useEffect(() => {
     if (!email || !roomId) return;
+
     socket.emit("join-room", {roomId,email});
+    socket.on("user-joined", ({email})=>{
+      console.log(`New User joined : ${email}`);
+    });
 
   }, [roomId, email]);
 

@@ -24,10 +24,11 @@ const io = new Server(server, {
 io.on('connection',(socket)=>{
      socket.on("join-room", ({roomId, email})=>{
       emailToSockerMapping.set(email, socket.id);
-      socketToEmailMapping(socket.id, email);
+      socketToEmailMapping.set(socket.id, email);
       
       socket.join(roomId);
       console.log(`User ${email} joined room no : ${roomId}`);
+      socket.broadcast.to(roomId).emit("user-joined", {email});
      })
 })
 
