@@ -21,12 +21,12 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
+
   socket.on("join-room", ({ roomId, email }) => {
     emailToSockerMapping.set(email, socket.id);
     socketToEmailMapping.set(socket.id, email);
 
     socket.join(roomId);
-    console.log(`User ${email} joined room no : ${roomId}`);
     socket.broadcast.to(roomId).emit("user-joined", { email });
   });
 
@@ -41,9 +41,15 @@ io.on("connection", (socket) => {
   socket.on("call-accepted", ({ email, answer }) => {
     const targetSocketId = emailToSockerMapping.get(email);
     if (!targetSocketId) return;
-
     socket.to(targetSocketId).emit("call-accepted", { answer });
   });
+
+  socket.on("ice-candidate", ({ email, candidate }) => {
+  const targetSocketId = emailToSockerMapping.get(email);
+  if (!targetSocketId) return;
+  socket.to(targetSocketId).emit("ice-candidate", { candidate });
+});
+
 });
 
 server.listen(PORT, () => {

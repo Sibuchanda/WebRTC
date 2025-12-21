@@ -10,16 +10,31 @@ const RoomPage = () => {
 
   const pcRef = useRef(null);
   const localVideoRef = useRef(null);
+  const remoteVideoRef = useRef(null);
 
   useEffect(() => {
     if (!email || !roomId) return;
 
     socket.emit("join-room", { roomId, email });
 
+    // =============== CALLER SIDE (OFFER) ===============
     socket.on("user-joined", async ({ email: joinedEmail }) => {
       pcRef.current = new RTCPeerConnection(RTC_CONFIG); // creating peer connection
-      const stream = await navigator.mediaDevices.getUserMedia({
-        // Getting media
+
+      pcRef.current.onicecandidate = (event) => { // Sending ICE candidates
+        if (event.candidate) {
+          socket.emit("ice-candidate", {
+            email: joinedEmail,
+            candidate: event.candidate,
+          });
+        }
+      };
+      // Receiving remote stream
+      pcRef.current.ontrack = (event) => {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia({ // Getting media
         video: true,
         audio: true,
       });
@@ -34,10 +49,22 @@ const RoomPage = () => {
       socket.emit("call-user", { email: joinedEmail, offer }); //Seding offer request to the joined user
     });
 
-
+    // ================= CALLEE SIDE (ANSWER)====================
     socket.on("incoming-call", async ({ from, offer }) => {
-      //  console.log(`Incoming call from : ${from}  with offer : ${offer}`)
       pcRef.current = new RTCPeerConnection(RTC_CONFIG);
+
+      pcRef.current.onicecandidate = (event) => { // Sending ICE candidates
+        if (event.candidate) {
+          socket.emit("ice-candidate", {
+            email: from,
+            candidate: event.candidate,
+          });
+        }
+      };
+      // Receiving remote stream
+      pcRef.current.ontrack = (event) => {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      };
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: true,
@@ -56,32 +83,50 @@ const RoomPage = () => {
         email: from,
         answer,
       });
-
     });
 
-
-    socket.on("call-accepted", async({answer})=>{
+    // ================= CALLER RECEIVES ANSWER ==============
+    socket.on("call-accepted", async ({ answer }) => {
       await pcRef.current.setRemoteDescription(answer);
-    })
+    });
+
+    // ================== ICE CANDIDATE RECEIVE =================
+    socket.on("ice-candidate", async ({ candidate }) => {
+      if (candidate && pcRef.current) {
+        await pcRef.current.addIceCandidate(candidate);
+      }
+    });
 
     // Cleanup functions
     return () => {
       socket.off("user-joined");
       socket.off("incoming-call");
+      socket.off("ice-candidate");
+      socket.off("call-accepted");
     };
   }, [roomId, email]);
 
+
+  
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100">
+    <>
       <h2 className="text-3xl font-bold mb-4">Room: {roomId}</h2>
-      <video
-        ref={localVideoRef}
-        autoPlay
-        muted
-        playsInline
-        className="w-72 border"
-      />
-    </div>
+      <div className="min-h-screen flex gap-6 items-center justify-center bg-gray-100">
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-64 border"
+        />
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className="w-64 border"
+        />
+      </div>
+    </>
   );
 };
 
