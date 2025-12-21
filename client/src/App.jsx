@@ -1,19 +1,15 @@
 import { Route, Routes } from "react-router";
 import Home from "./pages/Home";
-import { Roompage } from "./pages/Roompage";
-
-import { PeerProvider } from "./providers/peer";
+import RoomPage from "./pages/Roompage";
 
 
 function App() {
   return (
     <>
-      <PeerProvider>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/room/:id" element={<Roompage/>} />
+          <Route path="/room/:id" element={<RoomPage/>} />
         </Routes>
-        </PeerProvider>
     </>
   );
 }
