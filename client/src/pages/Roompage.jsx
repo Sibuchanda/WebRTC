@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { GoMute, GoUnmute } from "react-icons/go";
+import { IoVideocam, IoVideocamOff } from "react-icons/io5";
 import socket from "../config/socket";
 import RTC_CONFIG from "../config/RtcConfig";
 
@@ -12,6 +14,10 @@ const RoomPage = () => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const pendingIceCandidates = useRef([]);
+  const localStreamRef = useRef(null);
+
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(false);
 
   useEffect(() => {
     if (!email || !roomId) return;
@@ -20,10 +26,9 @@ const RoomPage = () => {
 
     // =============== CALLER SIDE (OFFER) ===============
     socket.on("user-joined", async ({ email: joinedEmail }) => {
-      pcRef.current = new RTCPeerConnection(RTC_CONFIG); // creating peer connection
+      pcRef.current = new RTCPeerConnection(RTC_CONFIG);
 
       pcRef.current.onicecandidate = (event) => {
-        // Sending ICE candidates
         if (event.candidate) {
           socket.emit("ice-candidate", {
             email: joinedEmail,
@@ -31,29 +36,29 @@ const RoomPage = () => {
           });
         }
       };
-      // Receiving remote stream
+
       pcRef.current.ontrack = (event) => {
         remoteVideoRef.current.srcObject = event.streams[0];
       };
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        // Getting media
         video: true,
         audio: true,
       });
+      localStreamRef.current = stream;
 
       stream.getTracks().forEach((track) => {
         pcRef.current.addTrack(track, stream);
       });
       localVideoRef.current.srcObject = stream;
 
-      const offer = await pcRef.current.createOffer(); // creating offer
+      const offer = await pcRef.current.createOffer();
       await pcRef.current.setLocalDescription(offer);
       for (const c of pendingIceCandidates.current) {
         await pcRef.current.addIceCandidate(c);
       }
       pendingIceCandidates.current = [];
-      socket.emit("call-user", { email: joinedEmail, offer }); //Seding offer request to the joined user
+      socket.emit("call-user", { email: joinedEmail, offer });
     });
 
     // ================= CALLEE SIDE (ANSWER)====================
@@ -61,7 +66,6 @@ const RoomPage = () => {
       pcRef.current = new RTCPeerConnection(RTC_CONFIG);
 
       pcRef.current.onicecandidate = (event) => {
-        // Sending ICE candidates
         if (event.candidate) {
           socket.emit("ice-candidate", {
             email: from,
@@ -69,7 +73,7 @@ const RoomPage = () => {
           });
         }
       };
-      // Receiving remote stream
+
       pcRef.current.ontrack = (event) => {
         remoteVideoRef.current.srcObject = event.streams[0];
       };
@@ -78,22 +82,23 @@ const RoomPage = () => {
         video: true,
         audio: true,
       });
+      localStreamRef.current = stream;
+
       stream.getTracks().forEach((track) => {
         pcRef.current.addTrack(track, stream);
       });
       localVideoRef.current.srcObject = stream;
-      await pcRef.current.setRemoteDescription(offer); // Accept offer
+      await pcRef.current.setRemoteDescription(offer);
 
       for (const c of pendingIceCandidates.current) {
         await pcRef.current.addIceCandidate(c);
       }
       pendingIceCandidates.current = [];
 
-      const answer = await pcRef.current.createAnswer(); // Create answer
+      const answer = await pcRef.current.createAnswer();
       await pcRef.current.setLocalDescription(answer);
 
       socket.emit("call-accepted", {
-        // Send answer back
         email: from,
         answer,
       });
@@ -120,8 +125,37 @@ const RoomPage = () => {
       socket.off("incoming-call");
       socket.off("ice-candidate");
       socket.off("call-accepted");
+
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
+      }
+
+      if (pcRef.current) {
+        pcRef.current.close();
+      }
     };
   }, [roomId, email]);
+
+
+  const toggleAudio = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsAudioMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsVideoMuted(!videoTrack.enabled);
+      }
+    }
+  };
 
   return (
     <>
@@ -170,6 +204,41 @@ const RoomPage = () => {
             shadow-md
           "
           />
+
+          {/* Control Buttons */}
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
+            {/* Audio Mute/Unmute Button */}
+            <button
+              onClick={toggleAudio}
+              className={`p-4 rounded-full shadow-lg transition-all cursor-pointer ${
+                isAudioMuted
+                  ? "bg-red-500 hover:bg-red-600"
+                  : "bg-gray-800 hover:bg-gray-700"
+              }`}
+            >
+              {isAudioMuted ? (
+               <GoMute />
+              ) : (
+               <GoUnmute />
+              )}
+            </button>
+
+             {/* Video Mute/Unmute Button  */}
+            <button
+              onClick={toggleVideo}
+              className={`p-4 rounded-full shadow-lg transition-all cursor-pointer ${
+                isVideoMuted
+                  ? "bg-red-500 hover:bg-red-600"
+                  : "bg-gray-800 hover:bg-gray-700"
+              }`}
+            >
+              {isVideoMuted ? (
+               <IoVideocamOff />
+              ) : (
+             <IoVideocam />
+              )}
+            </button>
+          </div>
         </main>
       </div>
     </>
