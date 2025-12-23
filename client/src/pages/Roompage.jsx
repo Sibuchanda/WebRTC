@@ -15,6 +15,8 @@ const RoomPage = () => {
   const remoteVideoRef = useRef(null);
   const pendingIceCandidates = useRef([]);
   const localStreamRef = useRef(null);
+  const [callLive, setCallLive] = useState(false);
+  const [calleeEmail, setCalleeEmail] = useState("");
 
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const [isVideoMuted, setIsVideoMuted] = useState(false);
@@ -26,6 +28,7 @@ const RoomPage = () => {
 
     // =============== CALLER SIDE (OFFER) ===============
     socket.on("user-joined", async ({ email: joinedEmail }) => {
+      setCalleeEmail(joinedEmail);
       pcRef.current = new RTCPeerConnection(RTC_CONFIG);
 
       pcRef.current.onicecandidate = (event) => {
@@ -39,6 +42,7 @@ const RoomPage = () => {
 
       pcRef.current.ontrack = (event) => {
         remoteVideoRef.current.srcObject = event.streams[0];
+        setCallLive(true);
       };
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -63,6 +67,7 @@ const RoomPage = () => {
 
     // ================= CALLEE SIDE (ANSWER)====================
     socket.on("incoming-call", async ({ from, offer }) => {
+      setCalleeEmail(from); // Set the remote user's email
       pcRef.current = new RTCPeerConnection(RTC_CONFIG);
 
       pcRef.current.onicecandidate = (event) => {
@@ -76,6 +81,7 @@ const RoomPage = () => {
 
       pcRef.current.ontrack = (event) => {
         remoteVideoRef.current.srcObject = event.streams[0];
+        setCallLive(true);
       };
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -136,7 +142,6 @@ const RoomPage = () => {
     };
   }, [roomId, email]);
 
-
   const toggleAudio = () => {
     if (localStreamRef.current) {
       const audioTrack = localStreamRef.current.getAudioTracks()[0];
@@ -164,12 +169,14 @@ const RoomPage = () => {
           <h2 className="text-lg sm:text-xl font-semibold">
             Room ID : {roomId}
           </h2>
-          <div className="flex items-center gap-1 bg-black w-fit p-2 rounded-full ml-2">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-slate-300 text-sm font-medium tracking-wide">
-              LIVE
-            </span>
-          </div>
+          {callLive && (
+            <div className="flex items-center gap-1 bg-black w-fit p-2 rounded-full ml-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
+              <span className="text-slate-300 text-sm font-medium tracking-wide">
+                LIVE
+              </span>
+            </div>
+          )}
         </header>
 
         <main className="relative flex-1 flex items-center justify-center overflow-hidden">
@@ -186,28 +193,32 @@ const RoomPage = () => {
             rounded-md
           "
           />
+          {calleeEmail && (
+            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg z-10">
+              <span className="text-white text-sm font-medium">
+                {calleeEmail}
+              </span>
+            </div>
+          )}
+
           {/* Local Video  */}
-          <video
-            ref={localVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="
-            absolute
-            bottom-3
-            right-3
-            w-28
-            sm:w-36
-            md:w-44
-            aspect-video
-            rounded-md
-            shadow-md
-          "
-          />
+          <div className="absolute bottom-3 right-3 w-28 sm:w-36 md:w-44 aspect-video">
+            <video
+              ref={localVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-full rounded-md object-cover shadow-md"
+            />
+            {email && (
+              <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded z-10">
+                <span className="text-white text-xs font-medium">{email}</span>
+              </div>
+            )}
+          </div>
 
           {/* Control Buttons */}
           <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
-            {/* Audio Mute/Unmute Button */}
             <button
               onClick={toggleAudio}
               className={`p-4 rounded-full shadow-lg transition-all cursor-pointer ${
@@ -216,14 +227,8 @@ const RoomPage = () => {
                   : "bg-gray-800 hover:bg-gray-700"
               }`}
             >
-              {isAudioMuted ? (
-               <GoMute />
-              ) : (
-               <GoUnmute />
-              )}
+              {isAudioMuted ? <GoMute /> : <GoUnmute />}
             </button>
-
-             {/* Video Mute/Unmute Button  */}
             <button
               onClick={toggleVideo}
               className={`p-4 rounded-full shadow-lg transition-all cursor-pointer ${
@@ -232,11 +237,7 @@ const RoomPage = () => {
                   : "bg-gray-800 hover:bg-gray-700"
               }`}
             >
-              {isVideoMuted ? (
-               <IoVideocamOff />
-              ) : (
-             <IoVideocam />
-              )}
+              {isVideoMuted ? <IoVideocamOff /> : <IoVideocam />}
             </button>
           </div>
         </main>
