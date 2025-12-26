@@ -1,166 +1,47 @@
-import { useEffect, useRef, useState } from "react";
-import { useParams, useLocation } from "react-router-dom";
-import { GoMute, GoUnmute } from "react-icons/go";
-import { IoVideocam, IoVideocamOff } from "react-icons/io5";
+import { createDevice } from "../sfu/device";
+import { createSendTransport } from "../sfu/transport";
 import socket from "../config/socket";
-import RTC_CONFIG from "../config/RtcConfig";
 
 const RoomPage = () => {
-  const { id: roomId } = useParams();
-  const location = useLocation();
-  const { email } = location.state || {};
 
-  const pcRef = useRef(null);
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const pendingIceCandidates = useRef([]);
-  const localStreamRef = useRef(null);
-  const [callLive, setCallLive] = useState(false);
-  const [calleeEmail, setCalleeEmail] = useState("");
-
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
 
   useEffect(() => {
-    if (!email || !roomId) return;
-
-    socket.emit("join-room", { roomId, email });
-
-    // =============== CALLER SIDE (OFFER) ===============
-    socket.on("user-joined", async ({ email: joinedEmail }) => {
-      setCalleeEmail(joinedEmail);
-      pcRef.current = new RTCPeerConnection(RTC_CONFIG);
-
-      pcRef.current.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("ice-candidate", {
-            email: joinedEmail,
-            candidate: event.candidate,
-          });
-        }
-      };
-
-      pcRef.current.ontrack = (event) => {
-        remoteVideoRef.current.srcObject = event.streams[0];
-        setCallLive(true);
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
+    const initSFU = async () => {
+      const rtpCapabilities = await new Promise((res) => {
+        socket.emit("get-rtp-capabilities", res);
       });
-      localStreamRef.current = stream;
 
-      stream.getTracks().forEach((track) => {
-        pcRef.current.addTrack(track, stream);
+      await createDevice(rtpCapabilities);
+      const transportParams = await new Promise((res) => {
+        socket.emit("create-transport", null, ({ params }) => res(params));
       });
-      localVideoRef.current.srcObject = stream;
-
-      const offer = await pcRef.current.createOffer();
-      await pcRef.current.setLocalDescription(offer);
-      for (const c of pendingIceCandidates.current) {
-        await pcRef.current.addIceCandidate(c);
-      }
-      pendingIceCandidates.current = [];
-      socket.emit("call-user", { email: joinedEmail, offer });
-    });
-
-    // ================= CALLEE SIDE (ANSWER)====================
-    socket.on("incoming-call", async ({ from, offer }) => {
-      setCalleeEmail(from); // Set the remote user's email
-      pcRef.current = new RTCPeerConnection(RTC_CONFIG);
-
-      pcRef.current.onicecandidate = (event) => {
-        if (event.candidate) {
-          socket.emit("ice-candidate", {
-            email: from,
-            candidate: event.candidate,
-          });
-        }
-      };
-
-      pcRef.current.ontrack = (event) => {
-        remoteVideoRef.current.srcObject = event.streams[0];
-        setCallLive(true);
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      localStreamRef.current = stream;
-
-      stream.getTracks().forEach((track) => {
-        pcRef.current.addTrack(track, stream);
-      });
-      localVideoRef.current.srcObject = stream;
-      await pcRef.current.setRemoteDescription(offer);
-
-      for (const c of pendingIceCandidates.current) {
-        await pcRef.current.addIceCandidate(c);
-      }
-      pendingIceCandidates.current = [];
-
-      const answer = await pcRef.current.createAnswer();
-      await pcRef.current.setLocalDescription(answer);
-
-      socket.emit("call-accepted", {
-        email: from,
-        answer,
-      });
-    });
-
-    // ================= CALLER RECEIVES ANSWER ==============
-    socket.on("call-accepted", async ({ answer }) => {
-      await pcRef.current.setRemoteDescription(answer);
-    });
-
-    // ================== ICE CANDIDATE RECEIVE =================
-    socket.on("ice-candidate", async ({ candidate }) => {
-      if (!pcRef.current || !candidate) return;
-      if (pcRef.current.remoteDescription) {
-        await pcRef.current.addIceCandidate(candidate);
-      } else {
-        pendingIceCandidates.current.push(candidate);
-      }
-    });
-
-    // Cleanup functions
-    return () => {
-      socket.off("user-joined");
-      socket.off("incoming-call");
-      socket.off("ice-candidate");
-      socket.off("call-accepted");
-
-      if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach((track) => track.stop());
-      }
-
-      if (pcRef.current) {
-        pcRef.current.close();
-      }
+      await createSendTransport(socket, transportParams);
     };
-  }, [roomId, email]);
 
-  const toggleAudio = () => {
-    if (localStreamRef.current) {
-      const audioTrack = localStreamRef.current.getAudioTracks()[0];
-      if (audioTrack) {
-        audioTrack.enabled = !audioTrack.enabled;
-        setIsAudioMuted(!audioTrack.enabled);
-      }
-    }
-  };
+    initSFU();
+  }, []);
 
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoMuted(!videoTrack.enabled);
-      }
-    }
-  };
+
+
+  // const toggleAudio = () => {
+  //   if (localStreamRef.current) {
+  //     const audioTrack = localStreamRef.current.getAudioTracks()[0];
+  //     if (audioTrack) {
+  //       audioTrack.enabled = !audioTrack.enabled;
+  //       setIsAudioMuted(!audioTrack.enabled);
+  //     }
+  //   }
+  // };
+
+  // const toggleVideo = () => {
+  //   if (localStreamRef.current) {
+  //     const videoTrack = localStreamRef.current.getVideoTracks()[0];
+  //     if (videoTrack) {
+  //       videoTrack.enabled = !videoTrack.enabled;
+  //       setIsVideoMuted(!videoTrack.enabled);
+  //     }
+  //   }
+  // };
 
   return (
     <>

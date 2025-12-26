@@ -26,3 +26,6 @@ export const createRouter = async () => {
 };
 
 export const getRouter = () => router;
+export const getRouterRtpCapabilities = () => {
+  return router.rtpCapabilities;
+};

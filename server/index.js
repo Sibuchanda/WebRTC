@@ -5,7 +5,7 @@ import { Server } from "socket.io";
 import cors from "cors";
 import { initSFU } from "./SFU/index.js";
 import { createWebRtcTransport } from "./SFU/transport.js";
-
+import { getRouterRtpCapabilities } from "./SFU/router.js";
 
 const PORT = process.env.PORT || 8001;
 
@@ -34,6 +34,15 @@ io.on("connection", (socket) => {
     } catch (err) {
       callback({ success: false });
     }
+  });
+
+  socket.on("get-rtp-capabilities", (callback) => {
+    callback(getRouterRtpCapabilities());
+  });
+
+  socket.on("connect-transport", async ({ dtlsParameters }, callback) => {
+    await socket.transport.connect({ dtlsParameters });
+    callback();
   });
 
 
