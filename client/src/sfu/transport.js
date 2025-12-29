@@ -19,3 +19,16 @@ export const createSendTransport = async (socket, transportParams) => {
 
   return transport;
 };
+
+export const produceMedia = async (transport, stream) => {
+  const audioTrack = stream.getAudioTracks()[0];
+  const videoTrack = stream.getVideoTracks()[0];
+
+  if (audioTrack) {
+    await transport.produce({ track: audioTrack });
+  }
+
+  if (videoTrack) {
+    await transport.produce({ track: videoTrack });
+  }
+};

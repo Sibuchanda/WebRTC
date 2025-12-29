@@ -6,6 +6,7 @@ import cors from "cors";
 import { initSFU } from "./SFU/index.js";
 import { createWebRtcTransport } from "./SFU/transport.js";
 import { getRouterRtpCapabilities } from "./SFU/router.js";
+import { createProducer } from "./SFU/producer.js";
 
 const PORT = process.env.PORT || 8001;
 
@@ -44,6 +45,19 @@ io.on("connection", (socket) => {
     await socket.transport.connect({ dtlsParameters });
     callback();
   });
+
+  socket.on("produce", async ({ kind, rtpParameters }, callback) => {
+  const producer = await createProducer(
+    socket.transport,
+    kind,
+    rtpParameters
+  );
+
+  socket.producers = socket.producers || [];
+  socket.producers.push(producer);
+
+  callback({ id: producer.id });
+});
 
 
 });

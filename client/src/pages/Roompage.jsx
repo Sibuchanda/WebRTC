@@ -1,129 +1,60 @@
-import { createDevice } from "../sfu/device";
-import { createSendTransport } from "../sfu/transport";
+import { useEffect, useRef, useState } from "react";
 import socket from "../config/socket";
 
+import { createDevice } from "../sfu/device";
+import { getLocalStream } from "../sfu/media";
+import { createSendTransport, produceMedia } from "../sfu/transport";
+
 const RoomPage = () => {
+  const localVideoRef = useRef(null);
+  const [sendTransport, setSendTransport] = useState(null);
 
-
+ 
   useEffect(() => {
     const initSFU = async () => {
-      const rtpCapabilities = await new Promise((res) => {
-        socket.emit("get-rtp-capabilities", res);
+      const rtpCapabilities = await new Promise((resolve) => {
+        socket.emit("get-rtp-capabilities", resolve);
       });
 
       await createDevice(rtpCapabilities);
-      const transportParams = await new Promise((res) => {
-        socket.emit("create-transport", null, ({ params }) => res(params));
+      const transportParams = await new Promise((resolve) => {
+        socket.emit(
+          "create-transport",
+          null,
+          ({ params }) => resolve(params)
+        );
       });
-      await createSendTransport(socket, transportParams);
+      const transport = await createSendTransport(socket, transportParams);
+      setSendTransport(transport);
     };
 
     initSFU();
   }, []);
 
 
+  useEffect(() => {
+    if (!sendTransport) return;
 
-  // const toggleAudio = () => {
-  //   if (localStreamRef.current) {
-  //     const audioTrack = localStreamRef.current.getAudioTracks()[0];
-  //     if (audioTrack) {
-  //       audioTrack.enabled = !audioTrack.enabled;
-  //       setIsAudioMuted(!audioTrack.enabled);
-  //     }
-  //   }
-  // };
-
-  // const toggleVideo = () => {
-  //   if (localStreamRef.current) {
-  //     const videoTrack = localStreamRef.current.getVideoTracks()[0];
-  //     if (videoTrack) {
-  //       videoTrack.enabled = !videoTrack.enabled;
-  //       setIsVideoMuted(!videoTrack.enabled);
-  //     }
-  //   }
-  // };
+    const startMedia = async () => {
+      const stream = await getLocalStream();
+      localVideoRef.current.srcObject = stream;
+      await produceMedia(sendTransport, stream);
+    };
+    startMedia();
+  }, [sendTransport]);
 
   return (
-    <>
-      <div className="h-screen w-screen overflow-hidden flex flex-col bg-gray-100">
-        <header className="shrink-0 py-3 text-center">
-          <h2 className="text-lg sm:text-xl font-semibold">
-            Room ID : {roomId}
-          </h2>
-          {callLive && (
-            <div className="flex items-center gap-1 bg-black w-fit p-2 rounded-full ml-2">
-              <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-slate-300 text-sm font-medium tracking-wide">
-                LIVE
-              </span>
-            </div>
-          )}
-        </header>
-
-        <main className="relative flex-1 flex items-center justify-center overflow-hidden">
-          {/* Remote Video */}
-          <video
-            ref={remoteVideoRef}
-            autoPlay
-            playsInline
-            className="
-            w-full
-            h-full
-            object-contain
-            max-w-[1200px]
-            rounded-md
-          "
-          />
-          {calleeEmail && (
-            <div className="absolute top-4 left-4 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg z-10">
-              <span className="text-white text-sm font-medium">
-                {calleeEmail}
-              </span>
-            </div>
-          )}
-
-          {/* Local Video  */}
-          <div className="absolute bottom-3 right-3 w-28 sm:w-36 md:w-44 aspect-video">
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-full rounded-md object-cover shadow-md"
-            />
-            {email && (
-              <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-1 rounded z-10">
-                <span className="text-white text-xs font-medium">{email}</span>
-              </div>
-            )}
-          </div>
-
-          {/* Control Buttons */}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-4">
-            <button
-              onClick={toggleAudio}
-              className={`p-4 rounded-full shadow-lg transition-all cursor-pointer ${
-                isAudioMuted
-                  ? "bg-red-500 hover:bg-red-600"
-                  : "bg-gray-800 hover:bg-gray-700"
-              }`}
-            >
-              {isAudioMuted ? <GoMute /> : <GoUnmute />}
-            </button>
-            <button
-              onClick={toggleVideo}
-              className={`p-4 rounded-full shadow-lg transition-all cursor-pointer ${
-                isVideoMuted
-                  ? "bg-red-500 hover:bg-red-600"
-                  : "bg-gray-800 hover:bg-gray-700"
-              }`}
-            >
-              {isVideoMuted ? <IoVideocamOff /> : <IoVideocam />}
-            </button>
-          </div>
-        </main>
+    <div className="h-screen w-screen flex items-center justify-center bg-gray-100">
+      <div className="relative w-full h-full flex items-center justify-center">
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className="w-full h-full object-contain max-w-300 rounded-md"
+        />
       </div>
-    </>
+    </div>
   );
 };
 
